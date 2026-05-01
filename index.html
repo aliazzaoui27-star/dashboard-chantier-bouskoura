@@ -472,14 +472,68 @@ const DEFAULT=[
 ══════════════════════════════════════════════════════════ */
 let T=[], F='all', S='', eid=null;
 
-function load(){
-  try{const s=localStorage.getItem('ps3_t');T=s?JSON.parse(s):DEFAULT.map(t=>({...t}));}
-  catch(e){T=DEFAULT.map(t=>({...t}));}
-  if(!localStorage.getItem('ps3_t'))persist();
+/* ══ JSONBIN CONFIG ══ */
+const BIN_ID = '69f4ec5caaba8821975e09dd';
+const API_KEY = '$2a$10$Ji7CiJdv2yjMyQKzCtj1OOZJ5RSrGIzJmLFhoVWxLPW0Cy5ZyB.MG';
+const BIN_URL = `https://api.jsonbin.io/v3/b/${BIN_ID}`;
+let isSaving = false;
+
+function showSync(msg, type){
+  let el = document.getElementById('sync-badge');
+  if(!el){
+    el = document.createElement('div');
+    el.id = 'sync-badge';
+    el.style.cssText = 'font-size:10px;padding:3px 10px;border-radius:4px;font-family:var(--m);margin-right:4px;transition:.3s';
+    document.querySelector('.hdr-acts').prepend(el);
+  }
+  el.textContent = msg;
+  if(type==='load' || type==='save') { el.style.background='rgba(196,168,130,.2)'; el.style.color='var(--sand)'; }
+  else if(type==='ok') { el.style.background='rgba(45,106,31,.15)'; el.style.color='#3B6D11'; setTimeout(()=>{ if(el.textContent===msg) el.textContent=''; }, 2500); }
+  else { el.style.background='rgba(138,31,31,.15)'; el.style.color='#8A1F1F'; }
 }
-function persist(){
-  localStorage.setItem('ps3_t',JSON.stringify(T));
-  document.getElementById('hdr-upd').textContent='Mis à jour : '+new Date().toLocaleString('fr-FR');
+
+async function load(){
+  showSync('⟳ Chargement…','load');
+  try{
+    const r = await fetch(BIN_URL+'/latest', { headers:{ 'X-Master-Key': API_KEY } });
+    const d = await r.json();
+    const tasks = d.record?.tasks;
+    if(tasks && tasks.length > 0){
+      T = tasks;
+      showSync('✓ Données chargées','ok');
+    } else {
+      // Bin vide → initialiser avec DEFAULT
+      T = DEFAULT.map(t=>({...t}));
+      await persist();
+    }
+  } catch(err){
+    console.warn('JSONBin indisponible, mode local', err);
+    try{ const s=localStorage.getItem('ps3_t'); T=s?JSON.parse(s):DEFAULT.map(t=>({...t})); }
+    catch(e){ T=DEFAULT.map(t=>({...t})); }
+    showSync('⚠ Mode hors-ligne','err');
+  }
+  renderTasks();
+}
+
+async function persist(){
+  if(isSaving) return;
+  isSaving = true;
+  showSync('⟳ Sauvegarde…','save');
+  try{
+    await fetch(BIN_URL, {
+      method: 'PUT',
+      headers:{ 'Content-Type':'application/json', 'X-Master-Key': API_KEY },
+      body: JSON.stringify({ tasks: T })
+    });
+    localStorage.setItem('ps3_t', JSON.stringify(T)); // backup local
+    document.getElementById('hdr-upd').textContent = 'Mis à jour : '+new Date().toLocaleString('fr-FR');
+    showSync('✓ Sauvegardé','ok');
+  } catch(err){
+    localStorage.setItem('ps3_t', JSON.stringify(T));
+    showSync('⚠ Sauvegarde locale','err');
+  } finally {
+    isSaving = false;
+  }
 }
 function nid(){return T.length?Math.max(...T.map(t=>t.id))+1:1;}
 function e(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
@@ -892,14 +946,14 @@ function exportCSV(){
   a.download='chantier_bouskoura_'+new Date().toISOString().slice(0,10)+'.csv';a.click();
 }
 function resetData(){
-  if(!confirm('Réinitialiser avec les données d\'origine ?'))return;
+  if(!confirm('Réinitialiser avec les données d\'origine ?\n⚠ Cela affectera TOUS les utilisateurs.'))return;
   T=DEFAULT.map(t=>({...t}));persist();renderTasks();
 }
 
 document.getElementById('mover').addEventListener('click',function(e){if(e.target===this)closeM();});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeM();});
 
-load();renderTasks();
+load();
 </script>
 </body>
 </html>
