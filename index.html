@@ -498,12 +498,14 @@ async function load(){
     const r = await fetch(BIN_URL+'/latest', { headers:{ 'X-Master-Key': API_KEY } });
     const d = await r.json();
     const tasks = d.record?.tasks;
-    if(tasks && tasks.length > 0){
+    if(Array.isArray(tasks) && tasks.length > 0){
       T = tasks;
       showSync('✓ Données chargées','ok');
+      renderTasks();
     } else {
-      // Bin vide → initialiser avec DEFAULT
+      // Bin vide → pousser les données DEFAULT sur JSONBin
       T = DEFAULT.map(t=>({...t}));
+      renderTasks();
       await persist();
     }
   } catch(err){
@@ -511,8 +513,8 @@ async function load(){
     try{ const s=localStorage.getItem('ps3_t'); T=s?JSON.parse(s):DEFAULT.map(t=>({...t})); }
     catch(e){ T=DEFAULT.map(t=>({...t})); }
     showSync('⚠ Mode hors-ligne','err');
+    renderTasks();
   }
-  renderTasks();
 }
 
 async function persist(){
